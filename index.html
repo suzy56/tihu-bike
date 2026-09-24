@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🪿 鹈鹕骑自行车 3D (Pelican Rider 3D)</title>
+  <meta name="description" content="全沉浸式 3D 鹈鹕骑自行车模拟器 - 程序化运动学解算、全合成立体声音效、无穷海岸风景与昼夜交替">
+  <style>
+    :root {
+      --primary: #18a999;
+      --accent: #f9a03f;
+      --glass-bg: rgba(22, 27, 34, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.18);
+      --glass-shadow: 0 12px 32px 0 rgba(0, 0, 0, 0.37);
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.75);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0f19;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Glassmorphic UI Layer */
+    .ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      box-shadow: var(--glass-shadow);
+      padding: 14px 20px;
+      transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.32);
+      box-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.45);
+    }
+
+    /* Top Header Bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .brand-title {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .brand-title h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #ffffff, #ffd166);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: #06d6a0;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background-color: #06d6a0;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #06d6a0;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    .center-badges {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge-pill {
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .badge-pill:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+
+    /* Telemetry Dashboard (Right Top) */
+    .telemetry-card {
+      min-width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .telemetry-label {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .telemetry-value {
+      font-size: 1.6rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      color: #ffd166;
+    }
+
+    .telemetry-unit {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .stat-mini-val {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    /* Energy Bar */
+    .energy-container {
+      margin-top: 4px;
+    }
+
+    .energy-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .energy-bar-fill {
+      width: 95%;
+      height: 100%;
+      background: linear-gradient(90deg, #06d6a0, #ffd166);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    /* Bottom Control Bar */
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .control-deck {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-action {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 10px 16px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .btn-action:active, .btn-action.active {
+      background: var(--primary);
+      border-color: #38ef7d;
+      transform: translateY(1px);
+    }
+
+    .btn-highlight {
+      background: linear-gradient(135deg, #f9a03f, #e76f51);
+      border: none;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(249, 160, 63, 0.4);
+    }
+
+    .btn-highlight:hover {
+      background: linear-gradient(135deg, #faa307, #f48c06);
+      box-shadow: 0 6px 20px rgba(249, 160, 63, 0.6);
+    }
+
+    /* Speed Slider Controls */
+    .speed-slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+    }
+
+    .speed-slider-wrap span {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 110px;
+      background: rgba(255, 255, 255, 0.2);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ffd166;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0,0,0,0.4);
+    }
+
+    /* Mobile Controls (Pedal & Brake) */
+    .mobile-touch-deck {
+      display: none;
+      position: absolute;
+      bottom: 100px;
+      width: calc(100% - 40px);
+      justify-content: space-between;
+      pointer-events: none;
+    }
+
+    .touch-btn {
+      pointer-events: auto;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(22, 27, 34, 0.75);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .touch-btn:active {
+      background: var(--primary);
+      transform: scale(0.92);
+    }
+
+    /* Instructions Modal */
+    .help-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.95);
+      background: rgba(15, 20, 30, 0.92);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 24px;
+      padding: 28px 34px;
+      max-width: 480px;
+      width: 90%;
+      z-index: 100;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+    }
+
+    .help-modal.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .help-modal h2 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: #ffd166;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .help-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .help-list li {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.88rem;
+    }
+
+    .kbd-chip {
+      background: rgba(255, 255, 255, 0.15);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .btn-close-modal {
+      width: 100%;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--primary);
+      border: none;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    /* Responsive Queries */
+    @media (max-width: 768px) {
+      .ui-layer { padding: 12px; }
+      .mobile-touch-deck { display: flex; }
+      .speed-slider-wrap { display: none; }
+      .brand-title h1 { font-size: 1.05rem; }
+      .telemetry-card { min-width: 150px; padding: 10px 14px; }
+      .telemetry-value { font-size: 1.3rem; }
+      .btn-action span { display: none; }
+      .btn-action { padding: 8px 12px; font-size: 1.0rem; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- HUD Interface Layer -->
+  <div class="ui-layer">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="glass-card brand-title interactive">
+        <h1>🪿 PELICAN RIDER 3D</h1>
+        <div class="live-badge">
+          <span class="live-dot"></span>
+          <span>程序化运动学物理引擎</span>
+        </div>
+      </div>
+
+      <div class="center-badges interactive">
+        <div id="cam-badge" class="badge-pill" title="切换摄像机视角 (C键)">追随视角 🎥</div>
+        <div id="time-badge" class="badge-pill" title="切换昼夜天气 (T键)">落日余晖 🌅</div>
+        <div id="btn-help" class="badge-pill" title="操作指南 (?)">❓ 操作</div>
+      </div>
+
+      <!-- Realtime Telemetry -->
+      <div class="glass-card telemetry-card interactive">
+        <div class="telemetry-row">
+          <span class="telemetry-label">时速 SPEED</span>
+          <div>
+            <span id="speed-num" class="telemetry-value">16.2</span>
+            <span class="telemetry-unit">km/h</span>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div>
+            <div class="telemetry-label">踏频 CADENCE</div>
+            <div>
+              <span id="rpm-num" class="stat-mini-val">68</span>
+              <span class="telemetry-unit">RPM</span>
+            </div>
+          </div>
+          <div>
+            <div class="telemetry-label">里程 DIST</div>
+            <div>
+              <span id="dist-num" class="stat-mini-val">0.12</span>
+              <span class="telemetry-unit">km</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="energy-container">
+          <div class="telemetry-label">鹈鹕体力 STAMINA</div>
+          <div class="energy-bar-bg">
+            <div id="energy-fill" class="energy-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Mobile Touch Control Deck -->
+    <div class="mobile-touch-deck">
+      <div id="btn-brake" class="touch-btn">刹车</div>
+      <div id="btn-pedal" class="touch-btn" style="background: rgba(24, 169, 153, 0.75);">加速</div>
+    </div>
+
+    <!-- Bottom Controls Deck -->
+    <footer class="bottom-bar">
+      <!-- Speed Slider -->
+      <div class="glass-card speed-slider-wrap interactive">
+        <span>慢速巡航</span>
+        <input type="range" id="speed-slider" min="1.0" max="14.0" step="0.5" value="4.5">
+        <span>极速飞驰</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="glass-card control-deck interactive">
+        <button id="btn-bell" class="btn-action" title="按空格键鸣响铃铛">
+          🔔 <span>清脆铃铛</span>
+        </button>
+        <button id="btn-honk" class="btn-action" title="按H键让鹈鹕大叫">
+          🪿 <span>鹈鹕鸣叫</span>
+        </button>
+        <button id="btn-wheelie" class="btn-action btn-highlight" title="按Shift键触发翘头特技">
+          🚀 <span>翘头特技</span>
+        </button>
+        <button id="btn-cam" class="btn-action" title="按C键切换视角">
+          📷 <span>切换视角</span>
+        </button>
+        <button id="btn-time" class="btn-action" title="按T键切换时间">
+          🌅 <span>时间环境</span>
+        </button>
+        <button id="btn-sound" class="btn-action" title="按M键静音/取消静音">
+          🔊
+        </button>
+        <button id="btn-bgm" class="btn-action" title="按B键播放合成Lo-Fi音乐">
+          🎵 <span>治愈音乐</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Help & Instructions Modal -->
+  <div id="help-modal" class="help-modal">
+    <h2>🪿 游戏与互动操作指南</h2>
+    <ul class="help-list">
+      <li><span>踩踏加速 / 巡航</span> <span class="kbd-chip">W / ↑ 键</span></li>
+      <li><span>刹车减速</span> <span class="kbd-chip">S / ↓ 键</span></li>
+      <li><span>转向倾斜</span> <span class="kbd-chip">A / D / ← → 键</span></li>
+      <li><span>车把铜铃铛 (双音Ding-Ding!)</span> <span class="kbd-chip">Space 空格键</span></li>
+      <li><span>鹈鹕特色鸣叫 (大嘴张开喉囊弹跳)</span> <span class="kbd-chip">H 键</span></li>
+      <li><span>火箭翘头炫技 (双翼展开)</span> <span class="kbd-chip">Shift 键</span></li>
+      <li><span>切换 5 种摄像机视角</span> <span class="kbd-chip">C 键</span></li>
+      <li><span>切换昼夜/夕阳/赛博霓虹</span> <span class="kbd-chip">T 键</span></li>
+      <li><span>开关环境合成音效 / 治愈BGM</span> <span class="kbd-chip">M / B 键</span></li>
+      <li><span>360° 自由旋转视角</span> <span class="kbd-chip">鼠标拖拽 / 滚轮缩放</span></li>
+    </ul>
+    <button id="btn-close-help" class="btn-close-modal">出发骑行！</button>
+  </div>
+
+  <script>
+    // Help Modal Toggle
+    const helpModal = document.getElementById('help-modal');
+    document.getElementById('btn-help')?.addEventListener('click', () => {
+      helpModal.classList.toggle('open');
+    });
+    document.getElementById('btn-close-help')?.addEventListener('click', () => {
+      helpModal.classList.remove('open');
+    });
+  </script>
+
+  <!-- Load bundled application -->
+  <script type="module" src="./dist/bundle.js"></script>
+</body>
+</html>
