@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TextureGenerator } from './textures.js';
 
 export class Pelican {
   constructor(bicycle) {
@@ -25,39 +26,47 @@ export class Pelican {
   }
 
   createMaterials() {
-    // Body Feathers: Warm Snowy White
-    this.featherWhiteMat = new THREE.MeshStandardMaterial({
-      color: 0xf7f8fc,
-      roughness: 0.85,
-      metalness: 0.05
+    // Body Feathers: Warm Snowy White with Velvety Sheen
+    this.featherWhiteMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf8f9fa,
+      roughness: 0.72,
+      metalness: 0.02,
+      sheen: 0.85,
+      sheenColor: new THREE.Color(0xffffff),
+      sheenRoughness: 0.5
     });
 
-    // Dark Wing Tips & Tail Feathers: Slate Charcoal
-    this.featherDarkMat = new THREE.MeshStandardMaterial({
-      color: 0x3a404a,
-      roughness: 0.9,
-      metalness: 0.05
+    // Dark Wing Tips & Tail Feathers: Slate Charcoal with Sheen
+    this.featherDarkMat = new THREE.MeshPhysicalMaterial({
+      color: 0x2b2d42,
+      roughness: 0.8,
+      metalness: 0.05,
+      sheen: 0.5,
+      sheenColor: new THREE.Color(0x8d99ae)
     });
 
-    // Upper Bill: Golden Amber / Honey Horn
+    // Upper Bill: Procedural Keratin Texture with Gradient and Ridges
     this.billMat = new THREE.MeshStandardMaterial({
-      color: 0xf9a03f,
-      roughness: 0.35,
-      metalness: 0.15
+      map: TextureGenerator.createBeakTexture(),
+      roughness: 0.28,
+      metalness: 0.15,
+      envMapIntensity: 1.3
     });
 
     // Bill Hook Tip: Crimson Amber
     this.billTipMat = new THREE.MeshStandardMaterial({
-      color: 0xd84a1b,
-      roughness: 0.3,
+      color: 0x9e0012,
+      roughness: 0.25,
       metalness: 0.2
     });
 
-    // Throat Pouch (Gular Sac): Stretchy Soft Apricot/Pinkish
-    this.pouchMat = new THREE.MeshStandardMaterial({
-      color: 0xf7b267,
-      roughness: 0.5,
+    // Throat Pouch (Gular Sac): Stretchy Soft Apricot with Subsurface Scattering
+    this.pouchMat = new THREE.MeshPhysicalMaterial({
+      color: 0xfda855,
+      roughness: 0.45,
       metalness: 0.05,
+      transmission: 0.15,
+      thickness: 0.35,
       side: THREE.DoubleSide
     });
 
@@ -525,6 +534,10 @@ export class Pelican {
     this.pelvis.rotation.z = this.cadenceSway;
     this.pelvis.rotation.x = Math.sin(crankAngle * 0.5) * 0.03;
 
+    // Aerodynamic Racing Tuck when sprinting
+    const sprintTuck = Math.max(0, Math.min((speed - 4.5) * 0.035, 0.22));
+    this.torso.rotation.z = -0.22 - sprintTuck;
+    this.neckBase.rotation.z = -sprintTuck * 0.7;
     // Head bobs forward and back with determination
     this.headBobPhase += delta * Math.max(speed * 3.5, 2.0);
     const headBobX = Math.cos(this.headBobPhase) * 0.03;
@@ -581,6 +594,11 @@ export class Pelican {
         this.eyes.forEach(eye => { eye.eyelid.scale.y = 0.05; });
       }
     }
+    // Pupil micro-saccades / tracking road
+    const glance = Math.sin(Date.now() * 0.002) * 0.003;
+    this.eyes.forEach(eye => {
+      eye.pupil.position.y = glance;
+    });
 
     // 5. Wings Adaptation (Wheelie / Gliding)
     if (isWheelie) {

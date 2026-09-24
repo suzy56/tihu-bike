@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TextureGenerator } from './textures.js';
 
 export class World {
   constructor(scene) {
@@ -14,6 +15,7 @@ export class World {
     this.streetLamps = [];
     this.clouds = [];
     this.particles = null;
+    this.beaconBeam = null;
 
     this.currentTimeOfDay = 'sunset'; // 'day', 'sunset', 'night', 'cyberpunk'
 
@@ -22,13 +24,12 @@ export class World {
   }
 
   createMaterials() {
-    // Road Asphalt
+    // Road Asphalt with Procedural Granular Map
     this.asphaltMat = new THREE.MeshStandardMaterial({
-      color: 0x2b2d42,
-      roughness: 0.9,
-      metalness: 0.1
+      map: TextureGenerator.createAsphaltTexture(),
+      roughness: 0.85,
+      metalness: 0.12
     });
-
     // Road Markings (Yellow & White)
     this.markingYellowMat = new THREE.MeshStandardMaterial({
       color: 0xffd166,
@@ -128,6 +129,7 @@ export class World {
     this.buildClouds();
     this.buildSeagulls();
     this.buildAtmosphericParticles();
+    this.buildDistantCoastAndLighthouse();
     this.setupLighting();
   }
 
@@ -164,15 +166,19 @@ export class World {
   setTimeOfDay(timeKey) {
     this.currentTimeOfDay = timeKey;
 
+    // Generate dynamic IBL environment sky texture
+    const envMap = TextureGenerator.createEnvironmentMap(timeKey);
+    this.scene.environment = envMap;
+    this.scene.background = envMap;
+
     switch (timeKey) {
       case 'day':
-        this.scene.background = new THREE.Color(0x70c1ff);
         this.scene.fog.color = new THREE.Color(0x9bd8ff);
-        this.scene.fog.density = 0.008;
+        this.scene.fog.density = 0.007;
         this.ambientLight.color.setHex(0xffffff);
-        this.ambientLight.intensity = 0.7;
+        this.ambientLight.intensity = 0.75;
         this.sunLight.color.setHex(0xfffaed);
-        this.sunLight.intensity = 2.0;
+        this.sunLight.intensity = 2.2;
         this.sunLight.position.set(20, 60, -20);
         this.hemiLight.color.setHex(0x70c1ff);
         this.hemiLight.groundColor.setHex(0xf4a261);
@@ -181,48 +187,45 @@ export class World {
         break;
 
       case 'sunset':
-        this.scene.background = new THREE.Color(0xfd7e14);
         this.scene.fog.color = new THREE.Color(0xfb8b24);
-        this.scene.fog.density = 0.011;
+        this.scene.fog.density = 0.010;
         this.ambientLight.color.setHex(0xffeedd);
-        this.ambientLight.intensity = 0.6;
+        this.ambientLight.intensity = 0.65;
         this.sunLight.color.setHex(0xff6b35);
-        this.sunLight.intensity = 2.4;
+        this.sunLight.intensity = 2.6;
         this.sunLight.position.set(-50, 18, -40); // Low sunset angle
         this.hemiLight.color.setHex(0xf77f00);
         this.hemiLight.groundColor.setHex(0xd62828);
         this.oceanMat.color.setHex(0x005f73);
-        this.setLampsEmissive(0.6);
+        this.setLampsEmissive(0.8);
         break;
 
       case 'cyberpunk':
-        this.scene.background = new THREE.Color(0x130026);
         this.scene.fog.color = new THREE.Color(0x240046);
-        this.scene.fog.density = 0.014;
+        this.scene.fog.density = 0.013;
         this.ambientLight.color.setHex(0x9d4edd);
-        this.ambientLight.intensity = 0.45;
+        this.ambientLight.intensity = 0.5;
         this.sunLight.color.setHex(0xff007f);
-        this.sunLight.intensity = 1.6;
+        this.sunLight.intensity = 1.8;
         this.sunLight.position.set(-30, 25, 20);
         this.hemiLight.color.setHex(0x00f5d4);
         this.hemiLight.groundColor.setHex(0x7b2cbf);
         this.oceanMat.color.setHex(0x10002b);
-        this.setLampsEmissive(1.5, 0x00f5d4);
+        this.setLampsEmissive(1.8, 0x00f5d4);
         break;
 
       case 'night':
-        this.scene.background = new THREE.Color(0x050814);
         this.scene.fog.color = new THREE.Color(0x0a1128);
-        this.scene.fog.density = 0.012;
+        this.scene.fog.density = 0.011;
         this.ambientLight.color.setHex(0x1c2541);
-        this.ambientLight.intensity = 0.25;
+        this.ambientLight.intensity = 0.3;
         this.sunLight.color.setHex(0x8da9c4);
-        this.sunLight.intensity = 0.7; // Moonlight
+        this.sunLight.intensity = 0.9; // Moonlight
         this.sunLight.position.set(30, 45, -30);
         this.hemiLight.color.setHex(0x0b2545);
         this.hemiLight.groundColor.setHex(0x011627);
         this.oceanMat.color.setHex(0x03045e);
-        this.setLampsEmissive(1.8, 0xffd166);
+        this.setLampsEmissive(2.2, 0xffd166);
         break;
     }
   }
@@ -293,6 +296,20 @@ export class World {
       rail.castShadow = true;
       segGroup.add(rail);
     });
+    // Hanging Nautical Catenary Ropes between posts
+    const ropeMat = new THREE.MeshStandardMaterial({ color: 0x8b6c42, roughness: 0.9 });
+    for (let i = 0; i < postCount - 1; i++) {
+      const x1 = -len * 0.5 + i * postSpacing;
+      const x2 = -len * 0.5 + (i + 1) * postSpacing;
+      const midX = (x1 + x2) * 0.5;
+      const curve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(x1, 0.65, -this.roadWidth * 0.5 - 0.12),
+        new THREE.Vector3(midX, 0.48, -this.roadWidth * 0.5 - 0.12),
+        new THREE.Vector3(x2, 0.65, -this.roadWidth * 0.5 - 0.12)
+      );
+      const ropeMesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 10, 0.018, 6, false), ropeMat);
+      segGroup.add(ropeMesh);
+    }
 
     // 6. Sandy Beach Slope down to Ocean
     const beachGeom = new THREE.PlaneGeometry(len, 16);
@@ -581,6 +598,76 @@ export class World {
     this.particles = new THREE.Points(geom, pMat);
     this.worldGroup.add(this.particles);
   }
+  buildDistantCoastAndLighthouse() {
+    this.coastGroup = new THREE.Group();
+    this.worldGroup.add(this.coastGroup);
+
+    // Distant mountain islands silhouettes
+    const islandMat = new THREE.MeshStandardMaterial({
+      color: 0x1b4332,
+      roughness: 0.95,
+      metalness: 0.05,
+      flatShading: true
+    });
+
+    [-120, -40, 50, 130].forEach((x, idx) => {
+      const islandGeom = new THREE.ConeGeometry(32 + idx * 8, 26 + idx * 5, 7);
+      const island = new THREE.Mesh(islandGeom, islandMat);
+      island.position.set(x, 5, -170 - idx * 10);
+      island.scale.set(1.5, 0.8, 1.0);
+      this.coastGroup.add(island);
+    });
+
+    // Red & White Striped Lighthouse on headland
+    this.lighthouse = new THREE.Group();
+    this.lighthouse.position.set(45, 10, -145);
+
+    // Base rock
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(12, 1), this.woodMat);
+    rock.position.y = -6;
+    this.lighthouse.add(rock);
+
+    // Tower bands
+    for (let b = 0; b < 5; b++) {
+      const bandMat = new THREE.MeshStandardMaterial({
+        color: b % 2 === 0 ? 0xef233c : 0xffffff,
+        roughness: 0.7
+      });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(2.2 - b * 0.2, 2.5 - b * 0.2, 4, 16), bandMat);
+      band.position.y = b * 4;
+      this.lighthouse.add(band);
+    }
+
+    // Lantern Room & Rotating Beacon
+    const lanternMat = new THREE.MeshStandardMaterial({
+      color: 0xfffae0,
+      emissive: 0xffea00,
+      emissiveIntensity: 2.0
+    });
+    const lantern = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.5, 12), lanternMat);
+    lantern.position.y = 21;
+    this.lighthouse.add(lantern);
+
+    // Rotating Beacon Beam Cone
+    this.beaconBeam = new THREE.Group();
+    this.beaconBeam.position.y = 21;
+    const beamGeom = new THREE.ConeGeometry(12, 140, 16, 1, true);
+    beamGeom.translate(0, -70, 0);
+    beamGeom.rotateX(-Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xffea00,
+      transparent: true,
+      opacity: 0.28,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const beamMesh = new THREE.Mesh(beamGeom, beamMat);
+    this.beaconBeam.add(beamMesh);
+    this.lighthouse.add(this.beaconBeam);
+
+    this.coastGroup.add(this.lighthouse);
+  }
 
   // Update world simulation per frame
   update(delta, bicycleSpeed) {
@@ -648,6 +735,10 @@ export class World {
         pPos.setY(i, Math.max(0.2, Math.min(y, 14)));
       }
       pPos.needsUpdate = true;
+    }
+    // 6. Rotate Lighthouse Beacon Beam
+    if (this.beaconBeam) {
+      this.beaconBeam.rotation.y += delta * 0.8;
     }
   }
 }

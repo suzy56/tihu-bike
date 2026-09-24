@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TextureGenerator } from './textures.js';
 
 export class Bicycle {
   constructor() {
@@ -23,47 +24,63 @@ export class Bicycle {
   }
 
   createMaterials() {
-    // Vintage Turquoise / Seafoam Enamel Frame
-    this.frameMat = new THREE.MeshStandardMaterial({
-      color: 0x18a999,
-      roughness: 0.2,
-      metalness: 0.6,
-      envMapIntensity: 1.2
+    // High-end Metallic Car Paint with Clearcoat
+    this.frameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x14b8a6,
+      roughness: 0.15,
+      metalness: 0.85,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      reflectivity: 0.95,
+      envMapIntensity: 1.6
     });
 
-    // Bright Chrome for handlebars, rims, spokes, bell, crank
+    // Mirror Bright Chrome
     this.chromeMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.1,
-      metalness: 0.95
+      roughness: 0.03,
+      metalness: 0.98,
+      envMapIntensity: 1.8
     });
 
-    // Dark Vintage Leather for Saddle & Grips
+    // Dark Vintage Leather with Procedural Grain & Stitch Map
     this.leatherMat = new THREE.MeshStandardMaterial({
-      color: 0x5c3317,
-      roughness: 0.6,
-      metalness: 0.1
+      map: TextureGenerator.createLeatherTexture(),
+      roughness: 0.55,
+      metalness: 0.08
     });
 
-    // Rubber Tires
+    // Rubber Tires with Procedural Tread Bump Map
     this.rubberMat = new THREE.MeshStandardMaterial({
-      color: 0x1f1f22,
-      roughness: 0.85,
-      metalness: 0.05
+      color: 0x1c1d21,
+      roughness: 0.8,
+      metalness: 0.05,
+      bumpMap: TextureGenerator.createTireTreadTexture(),
+      bumpScale: 0.02
     });
 
     // Brass Bell
     this.brassMat = new THREE.MeshStandardMaterial({
-      color: 0xe6b800,
-      roughness: 0.25,
-      metalness: 0.9
+      color: 0xf59e0b,
+      roughness: 0.18,
+      metalness: 0.92,
+      envMapIntensity: 1.4
     });
 
-    // Wicker Basket
+    // Wicker Basket with Woven Texture
     this.wickerMat = new THREE.MeshStandardMaterial({
-      color: 0xd4a373,
-      roughness: 0.8,
-      metalness: 0.05
+      map: TextureGenerator.createWickerTexture(),
+      roughness: 0.85,
+      metalness: 0.02
+    });
+
+    // Amber Reflectors (Pedals & Wheels)
+    this.reflectorMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.35,
+      roughness: 0.2,
+      metalness: 0.6
     });
 
     // Silvery Fish
@@ -181,6 +198,34 @@ export class Bicycle {
     });
 
     this.bikeBody.add(frameGroup);
+    // Sports Water Bottle in Aluminum Cage on Down Tube
+    const bottleCageGroup = new THREE.Group();
+    const cageMid = new THREE.Vector3().addVectors(this.bbPos, this.headTubeBottom).multiplyScalar(0.48);
+    bottleCageGroup.position.copy(cageMid);
+    const cageDir = new THREE.Vector3().subVectors(this.headTubeBottom, this.bbPos).normalize();
+    bottleCageGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), cageDir);
+
+    const bottleGeom = new THREE.CylinderGeometry(0.034, 0.034, 0.19, 14);
+    const bottleMat = new THREE.MeshStandardMaterial({ color: 0xef476f, roughness: 0.3, metalness: 0.1 });
+    const bottle = new THREE.Mesh(bottleGeom, bottleMat);
+    bottle.position.set(0, 0, 0.045);
+    bottleCageGroup.add(bottle);
+
+    const cageGeom = new THREE.CylinderGeometry(0.038, 0.038, 0.14, 12, 1, true);
+    const cageMesh = new THREE.Mesh(cageGeom, this.chromeMat);
+    cageMesh.position.set(0, -0.02, 0.045);
+    bottleCageGroup.add(cageMesh);
+    this.bikeBody.add(bottleCageGroup);
+
+    // Front and Rear Brake Cables running gracefully along frame
+    const cableMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const rearCableCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.06, this.wheelRadius + 0.58, -0.22),
+      new THREE.Vector3(this.seatClusterPos.x + 0.1, this.seatClusterPos.y + 0.02, -0.04),
+      new THREE.Vector3(this.rearAxlePos.x + 0.08, this.rearAxlePos.y + 0.14, -0.055)
+    ]);
+    const rearCable = new THREE.Mesh(new THREE.TubeGeometry(rearCableCurve, 20, 0.0035, 6, false), cableMat);
+    this.bikeBody.add(rearCable);
   }
 
   createSpokedWheel() {
@@ -202,6 +247,17 @@ export class Bicycle {
     const hub = new THREE.Mesh(hubGeom, this.chromeMat);
     hub.rotation.x = Math.PI / 2;
     wheel.add(hub);
+    // Spoke Reflector (Amber oval mounted on spokes)
+    const spokeReflGeom = new THREE.BoxGeometry(0.08, 0.025, 0.015);
+    const spokeRefl = new THREE.Mesh(spokeReflGeom, this.reflectorMat);
+    spokeRefl.position.set(0, this.wheelRadius * 0.52, 0);
+    wheel.add(spokeRefl);
+
+    // Valve Stem (tiny brass tube with black cap)
+    const valveGeom = new THREE.CylinderGeometry(0.003, 0.003, 0.025, 8);
+    const valve = new THREE.Mesh(valveGeom, this.brassMat);
+    valve.position.set(0, this.wheelRadius - 0.045 - 0.012, 0);
+    wheel.add(valve);
 
     // Spokes (32 spokes in classic cross pattern)
     const spokeCount = 28;
@@ -354,6 +410,22 @@ export class Bicycle {
     this.headlightGroup.add(this.headlight);
     this.headlightGroup.add(this.headlight.target);
 
+    // Volumetric Headlight Light Beam Cone
+    const beamGeom = new THREE.ConeGeometry(0.75, 4.2, 24, 1, true);
+    beamGeom.translate(0, -2.1, 0);
+    beamGeom.rotateX(-Math.PI / 2);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0xfffae0,
+      transparent: true,
+      opacity: 0.12,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const lightBeam = new THREE.Mesh(beamGeom, beamMat);
+    lightBeam.position.set(0.10, 0, 0);
+    this.headlightGroup.add(lightBeam);
+    this.lightBeam = lightBeam;
     this.steerGroup.add(this.headlightGroup);
 
     // Handlebar Grip Targets for Pelican Wings (World-relative hooks)
@@ -398,6 +470,12 @@ export class Bicycle {
     pedalMeshR.castShadow = true;
     this.rightPedal.add(pedalMeshR);
     this.rightCrankArm.add(this.rightPedal);
+    // Right Pedal Amber Reflectors (Front & Back)
+    [-0.03, 0.03].forEach(x => {
+      const pr = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.012, 0.075), this.reflectorMat);
+      pr.position.set(x, 0, 0);
+      this.rightPedal.add(pr);
+    });
 
     // Left Crank Arm & Pedal (180 deg opposite)
     this.leftCrankArm = new THREE.Group();
@@ -414,6 +492,12 @@ export class Bicycle {
     this.leftPedal.add(pedalMeshL);
     this.leftCrankArm.add(this.leftPedal);
 
+    // Left Pedal Amber Reflectors (Front & Back)
+    [-0.03, 0.03].forEach(x => {
+      const pr = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.012, 0.075), this.reflectorMat);
+      pr.position.set(x, 0, 0);
+      this.leftPedal.add(pr);
+    });
     this.crankGroup.add(this.rightCrankArm);
     this.crankGroup.add(this.leftCrankArm);
     this.bikeBody.add(this.crankGroup);
@@ -611,9 +695,13 @@ export class Bicycle {
       this.bikeBody.position.y += bump;
     }
 
-    // Floppy fish tail wagging
-    if (this.fishTail) {
-      this.fishTail.rotation.y = Math.sin(Date.now() * 0.012 * (1 + this.speed * 0.2)) * 0.4;
+    // Floppy fish tail wagging & basket bouncing
+    if (this.fishGroup && this.fishTail) {
+      const fishFreq = 10 + this.speed * 4;
+      this.fishTail.rotation.y = Math.sin(Date.now() * 0.001 * fishFreq) * 0.55;
+      const fishHop = Math.abs(Math.sin(Date.now() * 0.001 * (fishFreq * 0.5))) * 0.025;
+      this.fishGroup.position.y = 0.05 + fishHop;
+      this.fishGroup.rotation.z = 0.2 + Math.sin(Date.now() * 0.008) * 0.15;
     }
   }
 

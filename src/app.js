@@ -265,6 +265,10 @@ export class App {
     const nextTime = times[(idx + 1) % times.length];
     this.world.setTimeOfDay(nextTime);
 
+    // Dynamic tone mapping exposure per time of day
+    const exposures = { day: 1.05, sunset: 1.28, cyberpunk: 1.40, night: 1.18 };
+    this.renderer.toneMappingExposure = exposures[nextTime] || 1.1;
+
     if (this.timeBadgeEl) {
       const titles = {
         day: '晴空正午 ☀️',
@@ -381,6 +385,13 @@ export class App {
     const lerpFactor = this.cameraMode === 'beak' ? 0.35 : Math.min(delta * 6.0, 1.0);
     this.camera.position.lerp(idealPos, lerpFactor);
     this.camera.lookAt(lookTarget);
+
+    // High speed dynamic camera rumble
+    if (this.speed > 8.5) {
+      const rumble = (this.speed - 8.5) * 0.003;
+      this.camera.position.x += (Math.random() - 0.5) * rumble;
+      this.camera.position.y += (Math.random() - 0.5) * rumble;
+    }
   }
 
   updateHUD() {
